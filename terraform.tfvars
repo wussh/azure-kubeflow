@@ -1,0 +1,8 @@
+location           = "southeastasia"
+resource_group_name = "rg-kubeflow"
+vm_size           = "Standard_E4s_v5"
+admin_username    = "azureuser"
+ssh_key_filename  = "vm_key.pem"
+data_disk_size_gb = 100
+os_disk_type      = "Premium_LRS"
+data_disk_type    = "Premium_LRS" 
