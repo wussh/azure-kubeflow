@@ -118,6 +118,53 @@ To use the script effectively:
 2. Run `newgrp microk8s` as suggested in the output
 3. Run the script again to continue the setup process
 
+## GPU Support
+
+If your Azure VM has GPU capabilities, you can enable GPU support in MicroK8s to leverage hardware acceleration for machine learning workloads:
+
+### 1. Enable GPU Support in MicroK8s
+
+```bash
+# Enable the GPU add-on in MicroK8s
+microk8s enable gpu
+```
+
+### 2. Verify GPU Detection
+
+After enabling GPU support, verify that the GPUs are properly detected by Kubernetes:
+
+```bash
+# Check if GPUs are available in the cluster
+kubectl describe node | grep -i allocatable -A 10
+```
+
+You should see `nvidia.com/gpu` listed in the allocatable resources if the GPU is properly detected.
+
+### 3. Check GPU Status
+
+You can also use the NVIDIA System Management Interface to check the status of your GPUs:
+
+```bash
+# Display information about all available GPUs
+nvidia-smi
+```
+
+This command provides detailed information about your GPU, including:
+- GPU model
+- Driver version
+- CUDA version
+- Memory usage
+- GPU utilization
+- Running processes
+
+### 4. Using GPUs in Kubeflow
+
+When creating notebooks or training jobs in Kubeflow, you can request GPU resources by specifying the number of GPUs in the resource configuration.
+
+Example notebook server configuration with GPU:
+- Add GPU: 1 (or more based on your VM capabilities)
+- GPU Vendor: NVIDIA
+
 ## Accessing Kubeflow Dashboard
 
 After the deployment is complete, you can access the Kubeflow dashboard by:
@@ -155,6 +202,11 @@ Minimum requirements:
 - 16GB RAM
 - 100GB disk space
 
+For GPU-accelerated workloads, consider using VM sizes with NVIDIA GPUs:
+- Standard_NC6s_v3 (1 NVIDIA Tesla V100)
+- Standard_NC12s_v3 (2 NVIDIA Tesla V100)
+- Standard_NC24s_v3 (4 NVIDIA Tesla V100)
+
 ## Troubleshooting
 
 ### Common Issues
@@ -173,6 +225,12 @@ Minimum requirements:
 
 5. **Script Execution**:
    If the setup script fails, check the progress file at `~/.kubeflow_setup_progress` to see which step it reached.
+
+6. **GPU Issues**:
+   If GPUs are not detected, verify that:
+   - You're using a GPU-enabled VM size
+   - The NVIDIA drivers are installed (`nvidia-smi` should work)
+   - The GPU add-on is enabled (`microk8s enable gpu`)
 
 ## Cleanup
 
