@@ -6,7 +6,6 @@ set -e
 # 1. MicroK8s installation and configuration
 # 2. Juju installation and setup
 # 3. Kubeflow deployment
-# 4. Data disk setup and mounting
 #
 # The script implements a progress tracking mechanism to allow for resumption
 # if the script is interrupted.
@@ -185,81 +184,9 @@ if [ "$LAST_STEP" == "system_configured" ] || [ "$LAST_STEP" == "model_created" 
   update_progress "kubeflow_deployed"
 fi
 
-# Step 12: Data Disk Setup
-# Format and mount additional storage for Kubeflow data
-if [ "$LAST_STEP" == "kubeflow_deployed" ] || [ "$LAST_STEP" == "system_configured" ]; then
-  echo -e "${GREEN}Checking for data disk...${NC}"
-  
-  # Look for available data disks
-  DATA_DISK=""
-  for disk in /dev/sdb /dev/sdc /dev/sdd /dev/nvme0n1 /dev/nvme1n1; do
-    if [ -b "$disk" ]; then
-      # Skip if disk is already mounted or is the root disk
-      if ! mount | grep -q "$disk" && ! lsblk "$disk" | grep -q "/\$"; then
-        DATA_DISK="$disk"
-        echo -e "${GREEN}Found data disk at $DATA_DISK${NC}"
-        break
-      fi
-    fi
-  done
-  
-  if [ -n "$DATA_DISK" ]; then
-    # Mount data disk if not already mounted
-    if ! mount | grep -q "/data"; then
-      echo -e "${GREEN}Formatting and mounting data disk at $DATA_DISK...${NC}"
-      
-      # Create GPT partition table and primary partition
-      echo -e "${YELLOW}Creating partition on $DATA_DISK...${NC}"
-      sudo parted $DATA_DISK --script mklabel gpt mkpart primary ext4 0% 100%
-      
-      # Handle different partition naming conventions
-      PARTITION="${DATA_DISK}1"
-      if [[ $DATA_DISK == *"nvme"* ]]; then
-        PARTITION="${DATA_DISK}p1"
-      fi
-      
-      echo -e "${YELLOW}Waiting for partition $PARTITION to become available...${NC}"
-      sleep 5
-      
-      if [ -b "$PARTITION" ]; then
-        # Format partition and mount it
-        echo -e "${GREEN}Creating ext4 filesystem on $PARTITION...${NC}"
-        sudo mkfs.ext4 $PARTITION
-        
-        echo -e "${GREEN}Mounting disk to /data...${NC}"
-        sudo mkdir -p /data
-        sudo mount $PARTITION /data
-        
-        # Configure automatic mounting at boot
-        if ! grep -q "$PARTITION /data" /etc/fstab; then
-          echo "$PARTITION /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
-          echo -e "${GREEN}Added entry to fstab for automatic mounting at boot.${NC}"
-        fi
-        
-        sudo chown -R $USER:$USER /data
-        echo -e "${GREEN}Data disk mounted at /data${NC}"
-        echo -e "${GREEN}Disk space available:${NC}"
-        df -h /data
-      else
-        echo -e "${RED}Error: Partition $PARTITION not found after creation.${NC}"
-        echo -e "${YELLOW}Available block devices:${NC}"
-        lsblk
-      fi
-    else
-      echo -e "${YELLOW}A filesystem is already mounted at /data.${NC}"
-      df -h /data
-    fi
-  else
-    echo -e "${YELLOW}No suitable data disk found. Available disks:${NC}"
-    lsblk
-    echo -e "${YELLOW}Skipping disk setup. You may need to manually attach and format a data disk.${NC}"
-  fi
-  update_progress "completed"
-fi
-
 # Final Step: Setup Complete
 # Display instructions for accessing Kubeflow
-if [ "$LAST_STEP" == "completed" ]; then
+if [ "$LAST_STEP" == "completed" ] || [ "$LAST_STEP" == "kubeflow_deployed" ]; then
   echo -e "${GREEN}=== Kubeflow setup completed! ===${NC}"
   echo -e "${GREEN}You can access the Kubeflow dashboard by port-forwarding:${NC}"
   echo -e "${YELLOW}microk8s kubectl port-forward -n kubeflow service/istio-ingressgateway 8080:80 --address 0.0.0.0${NC}"

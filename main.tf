@@ -129,11 +129,6 @@ resource "azurerm_linux_virtual_machine" "vm" {
     public_key = tls_private_key.ssh_key.public_key_openssh
   }
 
-  # Add a data disk for Kubeflow storage
-  additional_capabilities {
-    ultra_ssd_enabled = false
-  }
-
   # Copy setup script to VM
   provisioner "file" {
     source      = "setup-kubeflow.sh"
@@ -178,21 +173,4 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 
   depends_on = [azurerm_network_interface.nic]
-}
-
-# Create and attach a managed disk
-resource "azurerm_managed_disk" "data_disk" {
-  name                 = "datadisk-kubeflow"
-  location             = azurerm_resource_group.kubeflow.location
-  resource_group_name  = azurerm_resource_group.kubeflow.name
-  storage_account_type = var.data_disk_type
-  create_option        = "Empty"
-  disk_size_gb         = var.data_disk_size_gb
-}
-
-resource "azurerm_virtual_machine_data_disk_attachment" "data_disk_attachment" {
-  managed_disk_id    = azurerm_managed_disk.data_disk.id
-  virtual_machine_id = azurerm_linux_virtual_machine.vm.id
-  lun                = 0
-  caching            = "ReadWrite"
 } 

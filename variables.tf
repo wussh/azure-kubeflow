@@ -28,20 +28,8 @@ variable "ssh_key_filename" {
   default     = "vm_key.pem"
 }
 
-variable "data_disk_size_gb" {
-  description = "The size of the data disk in GB"
-  type        = number
-  default     = 100
-}
-
 variable "os_disk_type" {
   description = "The storage account type for the OS disk"
-  type        = string
-  default     = "Premium_LRS"
-}
-
-variable "data_disk_type" {
-  description = "The storage account type for the data disk"
   type        = string
   default     = "Premium_LRS"
 } 
