@@ -165,27 +165,69 @@ fi
 # Format and mount the data disk
 if [ "$LAST_STEP" == "kubeflow_deployed" ] || [ "$LAST_STEP" == "system_configured" ]; then
   echo -e "${GREEN}Checking for data disk...${NC}"
-  if [ -b /dev/sdc ]; then
+  
+  # Check for common data disk device names
+  DATA_DISK=""
+  for disk in /dev/sdb /dev/sdc /dev/sdd /dev/nvme0n1 /dev/nvme1n1; do
+    if [ -b "$disk" ]; then
+      # Check if this disk is already mounted or is the root disk
+      if ! mount | grep -q "$disk" && ! lsblk "$disk" | grep -q "/\$"; then
+        DATA_DISK="$disk"
+        echo -e "${GREEN}Found data disk at $DATA_DISK${NC}"
+        break
+      fi
+    fi
+  done
+  
+  if [ -n "$DATA_DISK" ]; then
     # Check if disk is already mounted
     if ! mount | grep -q "/data"; then
-      echo -e "${GREEN}Formatting and mounting data disk...${NC}"
-      sudo parted /dev/sdc --script mklabel gpt mkpart primary ext4 0% 100%
-      sudo mkfs.ext4 /dev/sdc1
-      sudo mkdir -p /data
-      sudo mount /dev/sdc1 /data
+      echo -e "${GREEN}Formatting and mounting data disk at $DATA_DISK...${NC}"
       
-      # Add to fstab if not already there
-      if ! grep -q "/dev/sdc1 /data" /etc/fstab; then
-        echo "/dev/sdc1 /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
+      # Create partition
+      echo -e "${YELLOW}Creating partition on $DATA_DISK...${NC}"
+      sudo parted $DATA_DISK --script mklabel gpt mkpart primary ext4 0% 100%
+      
+      # Wait for partition to be available
+      PARTITION="${DATA_DISK}1"
+      if [[ $DATA_DISK == *"nvme"* ]]; then
+        PARTITION="${DATA_DISK}p1"
       fi
       
-      sudo chown -R $USER:$USER /data
-      echo -e "${GREEN}Data disk mounted at /data${NC}"
+      echo -e "${YELLOW}Waiting for partition $PARTITION to become available...${NC}"
+      sleep 5
+      
+      if [ -b "$PARTITION" ]; then
+        echo -e "${GREEN}Creating ext4 filesystem on $PARTITION...${NC}"
+        sudo mkfs.ext4 $PARTITION
+        
+        echo -e "${GREEN}Mounting disk to /data...${NC}"
+        sudo mkdir -p /data
+        sudo mount $PARTITION /data
+        
+        # Add to fstab if not already there
+        if ! grep -q "$PARTITION /data" /etc/fstab; then
+          echo "$PARTITION /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
+          echo -e "${GREEN}Added entry to fstab for automatic mounting at boot.${NC}"
+        fi
+        
+        sudo chown -R $USER:$USER /data
+        echo -e "${GREEN}Data disk mounted at /data${NC}"
+        echo -e "${GREEN}Disk space available:${NC}"
+        df -h /data
+      else
+        echo -e "${RED}Error: Partition $PARTITION not found after creation.${NC}"
+        echo -e "${YELLOW}Available block devices:${NC}"
+        lsblk
+      fi
     else
-      echo -e "${YELLOW}Data disk is already mounted at /data.${NC}"
+      echo -e "${YELLOW}A filesystem is already mounted at /data.${NC}"
+      df -h /data
     fi
   else
-    echo -e "${YELLOW}Data disk not found. Skipping disk setup.${NC}"
+    echo -e "${YELLOW}No suitable data disk found. Available disks:${NC}"
+    lsblk
+    echo -e "${YELLOW}Skipping disk setup. You may need to manually attach and format a data disk.${NC}"
   fi
   update_progress "completed"
 fi

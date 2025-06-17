@@ -111,6 +111,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     name                 = "osdisk-kubeflow"
     caching              = "ReadWrite"
     storage_account_type = var.os_disk_type
+    disk_size_gb         = 100  # Increase OS disk size for Kubeflow requirements
   }
 
   source_image_reference {
@@ -132,6 +133,51 @@ resource "azurerm_linux_virtual_machine" "vm" {
   additional_capabilities {
     ultra_ssd_enabled = false
   }
+
+  # Copy setup script to VM
+  provisioner "file" {
+    source      = "setup-kubeflow.sh"
+    destination = "/home/${var.admin_username}/setup-kubeflow.sh"
+    
+    connection {
+      type        = "ssh"
+      user        = var.admin_username
+      private_key = tls_private_key.ssh_key.private_key_pem
+      host        = azurerm_public_ip.public_ip.ip_address
+    }
+  }
+
+  # Make script executable
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /home/${var.admin_username}/setup-kubeflow.sh",
+      "echo 'Setup script is ready to run. Execute ./setup-kubeflow.sh to begin installation.'"
+    ]
+    
+    connection {
+      type        = "ssh"
+      user        = var.admin_username
+      private_key = tls_private_key.ssh_key.private_key_pem
+      host        = azurerm_public_ip.public_ip.ip_address
+    }
+  }
+
+  # Wait for cloud-init to complete
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Waiting for cloud-init to complete...'",
+      "cloud-init status --wait || echo 'Cloud-init failed but continuing anyway'"
+    ]
+    
+    connection {
+      type        = "ssh"
+      user        = var.admin_username
+      private_key = tls_private_key.ssh_key.private_key_pem
+      host        = azurerm_public_ip.public_ip.ip_address
+    }
+  }
+
+  depends_on = [azurerm_network_interface.nic]
 }
 
 # Create and attach a managed disk

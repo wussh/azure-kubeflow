@@ -112,11 +112,46 @@ The `setup-kubeflow.sh` script has been designed with robustness in mind:
 - **Idempotent Operations**: All operations check if they've already been completed, preventing duplicate installations.
 - **Group Membership Handling**: The script checks if the user is already in the microk8s group and provides clear instructions if a group membership change requires logging out.
 - **Error Handling**: Comprehensive checks are performed at each step to ensure successful execution.
+- **Disk Detection**: The script automatically searches for available data disks and mounts them to `/data`.
 
 To use the script effectively:
 1. Run it once to install MicroK8s and add yourself to the group
 2. Run `newgrp microk8s` as suggested in the output
 3. Run the script again to continue the setup process
+
+## Data Disk Management
+
+The deployment attaches a 100GB data disk to the VM for Kubeflow storage. The setup script will automatically detect and mount this disk to `/data`. 
+
+### Verifying Disk Space
+
+After running the setup script, check that the data disk is properly mounted:
+
+```bash
+df -h
+```
+
+You should see an entry for `/data` with approximately 100GB of space.
+
+### Manual Disk Mounting
+
+If the data disk is not automatically mounted, you can manually mount it:
+
+```bash
+# List all available disks
+lsblk
+
+# Identify the data disk (usually sdb, sdc, or nvme0n1)
+# Example: If sdb is your data disk:
+sudo parted /dev/sdb --script mklabel gpt mkpart primary ext4 0% 100%
+sudo mkfs.ext4 /dev/sdb1
+sudo mkdir -p /data
+sudo mount /dev/sdb1 /data
+sudo chown -R $USER:$USER /data
+
+# Add to fstab for persistence across reboots
+echo "/dev/sdb1 /data ext4 defaults 0 2" | sudo tee -a /etc/fstab
+```
 
 ## GPU Support
 
@@ -231,6 +266,12 @@ For GPU-accelerated workloads, consider using VM sizes with NVIDIA GPUs:
    - You're using a GPU-enabled VM size
    - The NVIDIA drivers are installed (`nvidia-smi` should work)
    - The GPU add-on is enabled (`microk8s enable gpu`)
+
+7. **Disk Space Issues**:
+   If you see `df -h` showing only the OS disk and no data disk:
+   - Check if the data disk was properly attached with `lsblk`
+   - Try manually mounting the disk as described in the "Manual Disk Mounting" section
+   - If the OS disk is running out of space, consider increasing its size in the Terraform configuration
 
 ## Cleanup
 
